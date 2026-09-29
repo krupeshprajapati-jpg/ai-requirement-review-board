@@ -113,3 +113,7 @@ streamlit run app.py
 - No persistence, authentication, or audit trail.
 - The Risk Reviewer gives general product-risk observations only, not legal or compliance advice.
 - AI output can be wrong; it supports, and does not replace, human review.
+
+## 10. Next enhancement: Retrieval-Augmented Generation (RAG)
+
+Implement RAG to retrieve relevant context from trusted sources such as product documentation, business rules, and approved policies, then provide cited excerpts to the review agents. Protect sensitive data and evaluate retrieval quality and review outcomes before production use. RAG can make findings more specific, but reviewers should verify sources and recommendations because it does not guarantee correctness.
