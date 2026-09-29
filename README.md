@@ -42,7 +42,18 @@ ai-requirement-review-board/
 |-- requirements.txt, .env.example, .gitignore, README.md
 ```
 
-## 2. Multi-agent explanation
+## 2. Technologies used
+
+This project is built with a lightweight Python stack designed for rapid prototyping:
+
+- Python 3.11+ as the core application language
+- Streamlit for the web UI and interactive review workflow
+- OpenAI Python SDK to call the LLM through an OpenAI-compatible API
+- OpenRouter as the model gateway that provides access to hosted LLMs
+
+This is a simple POC architecture: a Python app, a Streamlit front end, and multiple prompt-driven AI agents coordinated through a single orchestrator.
+
+## 3. Multi-agent explanation
 
 Each agent has one narrow job and one concise system prompt, instead of one generic prompt doing everything.
 The **orchestrator** is plain Python: it calls the agents in order and collects the results. Each agent makes
@@ -62,12 +73,12 @@ the specialists and Senior Reviewer. The LLM is only called when you click
 
 After the Guardrail allows a submission, the three specialists review the **original requirement independently** and run sequentially. The Senior Reviewer then sees the original requirement plus the specialist findings and creates the consolidated report.
 
-## 3. Prerequisites
+## 4. Prerequisites
 
 - Python 3.11+
 - A free OpenRouter account and API key: https://openrouter.ai/keys
 
-## 4. Setup
+## 5. Setup
 
 ```
 python -m venv venv
@@ -79,7 +90,7 @@ macOS/Linux: `source venv/bin/activate`
 pip install -r requirements.txt
 ```
 
-## 5. OpenRouter configuration
+## 6. OpenRouter configuration
 
 Copy `.env.example` to `.env` (Windows: `copy .env.example .env`, macOS/Linux: `cp .env.example .env`)
 and set:
@@ -90,7 +101,7 @@ OPENROUTER_API_KEY=sk-or-...your key...
 
 The default model is `openrouter/free` (OpenRouter's free router). Never commit `.env`.
 
-## 6. Run
+## 7. Run
 
 ```
 streamlit run app.py
