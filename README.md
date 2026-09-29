@@ -2,9 +2,9 @@
 
 Multi-Agent Requirement Quality Analysis
 A user enters a software/business requirement. A Guardrail checks whether it belongs in the workflow and
-blocks clearly illegal, harmful, or unrelated requests. Three specialist AI agents (Business Analyst, QA
-Engineer, Risk Reviewer) review allowed requirements independently, then a Senior Reviewer consolidates
-their findings into a quality score, top gaps and a final recommendation.
+blocks clearly illegal, harmful, or unrelated requests. An LLM classifier assesses complexity and chooses whether
+QA and product-risk reviews add value; the Business Analyst always runs. A Senior Reviewer consolidates
+the selected findings. Major gaps or an inconsistent score/status trigger one targeted specialist follow-up.
 
 > **Security / data privacy warning**
 > This POC sends requirement text to a third-party LLM provider. Do not submit confidential company information, customer PII, credentials, production data, or other sensitive information unless use of the provider has been approved by your organization.
@@ -18,25 +18,29 @@ their findings into a quality score, top gaps and a final recommendation.
              Requirement Input
                    |
               Orchestrator
-            +----------+----------+
-                           |
-                     Guardrail
-                           |
-            +----------+----------+
-        |          |          |
-     BA Agent   QA Agent   Risk Agent      (each sees the ORIGINAL requirement only)
-        |          |          |
-        +----------+----------+
                    |
-            Senior Reviewer                (sees requirement + 3 findings)
+              Guardrail
                    |
-             Final Report
+          Requirement Classifier
+                   |
+     BA always; QA and Risk are conditional
+                   |
+            Senior Reviewer
+                   |
+       Major gaps OR score mismatch?
+              /           \
+            yes             no
+             |               |
+     One specialist       Final Report
+       follow-up
+             |
+        Final Report
 ```
 
 ```
 ai-requirement-review-board/
 |-- app.py            Streamlit UI
-|-- orchestrator.py   runs the Guardrail, 3 specialists, then the Senior Reviewer
+|-- orchestrator.py   routes specialists, consolidates findings, and conditionally follows up
 |-- llm_client.py     OpenRouter client, error handling, JSON parsing
 |-- agents/           one file per agent (prompt + token limit)
 |-- requirements.txt, .env.example, .gitignore, README.md
@@ -56,9 +60,11 @@ This is a simple POC architecture: a Python app, a Streamlit front end, and mult
 ## 3. Multi-agent explanation
 
 Each agent has one narrow job and one concise system prompt, instead of one generic prompt doing everything.
-The **orchestrator** is plain Python: it calls the agents in order and collects the results. Each agent makes
-exactly **one** LLM call, so an allowed review uses **5 calls**. A blocked request uses one call and skips
-the specialists and Senior Reviewer. The LLM is only called when you click
+The **orchestrator** is plain Python: a classifier LLM call chooses which specialists run, then the Senior
+Reviewer consolidates their results. An allowed review uses **4 to 6 calls** (guardrail, classifier, BA,
+zero to two optional specialists, and Senior Reviewer), plus one call only when a targeted follow-up is triggered.
+A blocked request uses one call and skips the remaining workflow. If classifier JSON is unusable, all three
+specialists run as a conservative fallback. The LLM is only called when you click
 **Start AI Review**; results live in Streamlit `session_state`, so switching tabs never re-calls the LLM.
 
 ### Agents used in the demo
@@ -66,12 +72,13 @@ the specialists and Senior Reviewer. The LLM is only called when you click
 | Agent | Demo role | What it returns |
 |---|---|---|
 | **Guardrail** | Checks whether the submission belongs in the requirement-review workflow. It allows vague or high-risk requirements for further analysis, and blocks clearly unrelated or harmful requests. | An **ALLOW** or **BLOCK** decision with a short category and reason. |
+| **Requirement Classifier** | Estimates requirement complexity and chooses whether QA and risk reviews are useful. | Complexity and specialist-routing booleans. |
 | **Business Analyst** | Reviews the requirement from a business and scope perspective, calling out unclear actors, rules, inputs, permissions, failure behavior, and outcomes. | Summary, gaps, assumptions, clarification questions, and testable acceptance criteria. |
 | **QA Engineer** | Examines whether the requirement can be tested, including normal behavior, negative paths, boundaries, and validation. | Test scenarios, edge cases, and testability gaps. |
 | **Risk Reviewer** | Highlights general product and customer-impact risks, such as confusing communication, irreversible actions, or unclear financial impact. This is not a legal or compliance assessment. | Risk level, observations, customer impact, and recommendations. |
 | **Senior Reviewer** | Synthesizes the specialist findings into a decision-oriented assessment rather than repeating every observation. | Quality score, readiness status, executive summary, top gaps, recommended clarifications and acceptance criteria, and final recommendation. |
 
-After the Guardrail allows a submission, the three specialists review the **original requirement independently** and run sequentially. The Senior Reviewer then sees the original requirement plus the specialist findings and creates the consolidated report.
+After the Guardrail allows a submission, the selected specialists review the **original requirement independently** and run sequentially. The Senior Reviewer sees the original requirement plus their findings. A `MAJOR GAPS` result, or a mismatch between score and status, triggers one targeted specialist call based on the reported gaps; its findings appear alongside the consolidated assessment without a second Senior Reviewer call.
 
 ## 4. Prerequisites
 

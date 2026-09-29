@@ -18,34 +18,33 @@ SAMPLES = {
     "Sample 3 - Incomplete/Risky (failed EMI payment)": (
         "If a customer's monthly loan repayment fails, automatically retry the payment."
     ),
-    "Sample 4 - Service request (foreclosure statement)": (
-        "A loan customer should be able to request a foreclosure statement for an active loan from the "
-        "customer portal. The customer should be able to select the loan account, track the request status, "
-        "and receive a notification when the statement is available."
+    "Sample 4 - Low complexity (notification preference)": (
+        "A customer should be able to turn loan payment reminder emails on or off from the notification "
+        "settings page. The selected preference should be saved and shown when the page is reopened."
     ),
-    "Sample 5 - Service request (change EMI due date)": (
-        "A loan customer should be able to submit a request to change the monthly EMI due date, choose a "
-        "preferred new date, and provide a reason. The customer should be able to track whether the request "
-        "is pending, approved, or declined and receive a notification when it is decided."
+    "Sample 5 - QA focus (statement download)": (
+        "A customer should be able to download a monthly loan statement from the customer portal. The "
+        "statement should include transactions for the selected month and be available as a PDF."
     ),
     "Sample 6 - Service request (repayment dispute)": (
         "A loan customer should be able to raise a service request to dispute a repayment shown in their "
         "loan transaction history, describe the issue, and attach supporting documents. The customer should "
         "receive a case reference and be able to view status updates and the resolution."
     ),
-    "Sample 7 - Service request (loan closure)": (
-        "A loan customer should be able to submit a request to close a loan account after paying the "
-        "outstanding balance. The customer should be able to track the request and download a closure "
-        "confirmation once the request is completed."
+    "Sample 7 - Risk focus (repayment account change)": (
+        "A loan customer should be able to replace the bank account used for monthly repayments in the "
+        "customer portal after entering an OTP. The new account should be used for the next repayment."
     ),
 }
 PLACEHOLDER = "-- Choose a sample requirement --"
 
 AGENTS = [("guardrail", "Guardrail", "Checking request..."),
+          ("classifier", "Classifier", "Choosing reviews..."),
           ("ba", "Business Analyst", "Analyzing..."),
           ("qa", "QA Engineer", "Analyzing..."),
           ("risk", "Risk Reviewer", "Analyzing..."),
-          ("reviewer", "Senior Reviewer", "Consolidating...")]
+          ("reviewer", "Senior Reviewer", "Consolidating..."),
+          ("follow_up", "Targeted Follow-up", "Investigating gaps...")]
 
 STATUS_COLORS = {"READY": "#1a7f37", "NEEDS CLARIFICATION": "#b7791f", "MAJOR GAPS": "#c62828"}
 
@@ -137,7 +136,7 @@ col_clear.button("Clear Review", on_click=clear_review, use_container_width=True
 # ---------- status area ----------
 st.markdown("#### Agent Status")
 status_boxes = {}
-for column, (key, label, _) in zip(st.columns(5), AGENTS):
+for column, (key, label, _) in zip(st.columns(len(AGENTS)), AGENTS):
     status_boxes[key] = column.empty()
 
 RUNNING_TEXT = {key: text for key, _, text in AGENTS}
@@ -152,11 +151,15 @@ def show_status(key, state):
 
 def status_from_result(result):
     states = {}
-    for key, _, _ in AGENTS[:-1]:
+    for key, _, _ in AGENTS:
+        if key in {"reviewer", "follow_up"}:
+            continue
         agent = result["agents"].get(key)
         states[key] = "skipped" if agent is None else ("done" if agent["status"] == "ok" else "failed")
     final = result["final"]
     states["reviewer"] = "skipped" if final is None else ("done" if final["status"] == "ok" else "failed")
+    follow_up = result.get("follow_up")
+    states["follow_up"] = "skipped" if follow_up is None else ("done" if follow_up["status"] == "ok" else "failed")
     return states
 
 
@@ -183,8 +186,9 @@ if result:
     if result["error"]:
         st.error(result["error"])
 
-    tab_final, tab_guardrail, tab_ba, tab_qa, tab_risk, tab_tech = st.tabs(
-        ["Final Review", "Guardrail", "Business Analyst", "QA Engineer", "Risk Analysis", "Technical Details"])
+    tab_final, tab_guardrail, tab_classifier, tab_ba, tab_qa, tab_risk, tab_follow_up, tab_tech = st.tabs(
+        ["Final Review", "Guardrail", "Routing", "Business Analyst", "QA Engineer", "Risk Analysis",
+         "Targeted Follow-up", "Technical Details"])
 
     with tab_final:
         final = result["final"]
@@ -219,9 +223,20 @@ if result:
             render_bullets(data.get("recommended_acceptance_criteria"))
             st.subheader("Final Recommendation")
             st.write(data.get("final_recommendation", "N/A"))
+            if result.get("follow_up") and result["follow_up"]["status"] == "ok":
+                st.divider()
+                st.subheader("Targeted Follow-up Findings")
+                st.caption(f"Additional review by {result['follow_up']['name']}; the consolidated score is unchanged.")
+                render_agent_result(result["follow_up"])
 
     with tab_guardrail:
         render_agent_result(result["agents"].get("guardrail"))
+
+    with tab_classifier:
+        classifier = result["agents"].get("classifier")
+        render_agent_result(classifier)
+        if classifier and classifier["status"] == "failed" and not classifier["data"]:
+            st.info("Routing output was unusable; all specialists were run as a fallback.")
 
     with tab_ba:
         render_agent_result(result["agents"].get("ba"))
@@ -229,11 +244,16 @@ if result:
         render_agent_result(result["agents"].get("qa"))
     with tab_risk:
         render_agent_result(result["agents"].get("risk"))
+    with tab_follow_up:
+        if result.get("follow_up"):
+            render_agent_result(result["follow_up"])
+        else:
+            st.info("No targeted follow-up was needed for this assessment.")
 
     with tab_tech:
         st.markdown(f"**Model:** {result['model'] or 'N/A'}")
         st.markdown(f"**LLM calls:** {result['llm_calls']} (successful: {result['successful_calls']})")
-        st.markdown("**Agents:** 5")
+        st.markdown("**Agents:** 6, plus an optional targeted follow-up")
         st.markdown("**Architecture:** Multi-Agent Orchestration")
         if result["tokens"]:
             st.markdown(f"**Total tokens reported by provider:** {result['tokens']}")

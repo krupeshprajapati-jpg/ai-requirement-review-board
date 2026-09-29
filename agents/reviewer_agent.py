@@ -9,6 +9,8 @@ SYSTEM_PROMPT = (
     "Consolidate the findings; do not repeat everything. Be concise. "
     "Scoring guide: 9-10 very clear and implementation ready; 7-8 mostly clear with minor clarification; "
     "5-6 several important gaps; 0-4 major ambiguity or missing information. "
+    "Keep status consistent with score: READY for 7-10, NEEDS CLARIFICATION for 5-6, "
+    "and MAJOR GAPS for 0-4. "
     "Return ONLY valid JSON (no markdown, no extra text) with exactly these keys: "
     '"quality_score" (number 0-10, one decimal allowed), '
     '"status" (exactly one of: READY, NEEDS CLARIFICATION, MAJOR GAPS), '
