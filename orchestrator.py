@@ -1,6 +1,7 @@
 """Orchestrates guardrail, LLM-directed specialist review, and consolidation."""
 from agents import ba_agent, classifier_agent, guardrail_agent, qa_agent, reviewer_agent, risk_agent
 from llm_client import LLMClient, LLMError, parse_json
+import retriever
 
 SPECIALISTS = [("ba", ba_agent), ("qa", qa_agent), ("risk", risk_agent)]
 
@@ -145,7 +146,8 @@ def review(requirement: str, on_status=None) -> dict:
     # Each selected specialist sees only the original requirement.
     for key, module in selected_specialists:
         notify(key, "running")
-        agent_result = _run_agent(client, module, module.build_user_message(requirement))
+        context = retriever.get_context(key, requirement)
+        agent_result = _run_agent(client, module, module.build_user_message(requirement, context=context))
         result["agents"][key] = agent_result
         notify(key, "done" if agent_result["status"] == "ok" else "failed")
         if agent_result["fatal"]:  # e.g. bad API key: stop, do not waste calls
@@ -172,7 +174,11 @@ def review(requirement: str, on_status=None) -> dict:
         return finish()
 
     notify("reviewer", "running")
-    final = _run_agent(client, reviewer_agent, reviewer_agent.build_user_message(requirement, specialist_results))
+    reviewer_context = retriever.get_context("reviewer", requirement)
+    final = _run_agent(
+        client, reviewer_agent,
+        reviewer_agent.build_user_message(requirement, specialist_results, context=reviewer_context),
+    )
     result["final"] = final
     notify("reviewer", "done" if final["status"] == "ok" else "failed")
 
@@ -191,6 +197,9 @@ def review(requirement: str, on_status=None) -> dict:
             f"{result['agents'].get(key, {}).get('raw', 'No prior findings from this specialist.')}\n\n"
             "Provide one targeted follow-up assessment."
         )
+        follow_up_context = retriever.get_context(key, requirement)
+        if follow_up_context:
+            follow_up_message = f"{follow_up_message}\n\n{follow_up_context}"
         follow_up = _run_agent(client, module, follow_up_message, follow_up_prompt)
         follow_up["name"] = f"{module.NAME} (targeted follow-up)"
         follow_up["specialist"] = key

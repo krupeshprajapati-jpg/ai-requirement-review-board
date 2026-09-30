@@ -1,0 +1,26 @@
+[
+  {
+    "requirement": "A customer can make a part-payment on a loan and choose to reduce the EMI or shorten the remaining tenure.",
+    "quality_score": 5.0,
+    "status": "NEEDS CLARIFICATION",
+    "reason": "The payment limits, allocation rules, and effective schedule were not defined."
+  },
+  {
+    "requirement": "A customer can change the bank account used for monthly repayments after verifying the new account with an OTP.",
+    "quality_score": 6.0,
+    "status": "NEEDS CLARIFICATION",
+    "reason": "Verification was stated, but activation timing and failed-verification behavior were unclear."
+  },
+  {
+    "requirement": "When a monthly loan repayment fails, the system automatically retries the payment.",
+    "quality_score": 3.5,
+    "status": "MAJOR GAPS",
+    "reason": "Retry timing, maximum attempts, customer notice, and duplicate-payment protection were missing."
+  },
+  {
+    "requirement": "A customer can download a PDF statement for a selected month, with that month's transactions included.",
+    "quality_score": 8.0,
+    "status": "READY",
+    "reason": "The main action and output were clear, with only minor availability and empty-month details to confirm."
+  }
+]

@@ -12,5 +12,6 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_user_message(requirement: str) -> str:
-    return f"Requirement:\n{requirement}"
+def build_user_message(requirement: str, context: str = "") -> str:
+    message = f"Requirement:\n{requirement}"
+    return f"{message}\n\n{context}" if context else message

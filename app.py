@@ -255,5 +255,6 @@ if result:
         st.markdown(f"**LLM calls:** {result['llm_calls']} (successful: {result['successful_calls']})")
         st.markdown("**Agents:** 6, plus an optional targeted follow-up")
         st.markdown("**Architecture:** Multi-Agent Orchestration")
+        st.markdown("**Retrieval:** local TF-IDF over a synthetic knowledge base (no external calls)")
         if result["tokens"]:
             st.markdown(f"**Total tokens reported by provider:** {result['tokens']}")

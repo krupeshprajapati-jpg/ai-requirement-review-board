@@ -22,9 +22,11 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_user_message(requirement: str, agent_results: dict) -> str:
+def build_user_message(requirement: str, agent_results: dict, context: str = "") -> str:
     """agent_results: {key: {"name", "status", "raw", "data", ...}} from the specialist agents."""
     parts = [f"Original requirement:\n{requirement}"]
+    if context:
+        parts.append(context)
     for result in agent_results.values():
         if result["status"] != "ok":
             parts.append(f"{result['name']} findings: FAILED - no findings available.")

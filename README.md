@@ -40,7 +40,9 @@ the selected findings. Major gaps or an inconsistent score/status trigger one ta
 ```
 ai-requirement-review-board/
 |-- app.py            Streamlit UI
-|-- orchestrator.py   routes specialists, consolidates findings, and conditionally follows up
+|-- orchestrator.py   routes specialists, retrieves context, consolidates findings, and conditionally follows up
+|-- retriever.py      local TF-IDF retrieval over the synthetic knowledge base
+|-- knowledge_base/   synthetic glossary, review guidance, risk patterns, and past reviews
 |-- llm_client.py     OpenRouter client, error handling, JSON parsing
 |-- agents/           one file per agent (prompt + token limit)
 |-- requirements.txt, .env.example, .gitignore, README.md
@@ -54,8 +56,9 @@ This project is built with a lightweight Python stack designed for rapid prototy
 - Streamlit for the web UI and interactive review workflow
 - OpenAI Python SDK to call the LLM through an OpenAI-compatible API
 - OpenRouter as the model gateway that provides access to hosted LLMs
+- scikit-learn for local TF-IDF similarity search over reference snippets
 
-This is a simple POC architecture: a Python app, a Streamlit front end, and multiple prompt-driven AI agents coordinated through a single orchestrator.
+This is a simple POC architecture: a Python app, a Streamlit front end, multiple prompt-driven AI agents, and local retrieval coordinated through a single orchestrator. Retrieval uses no external service or API.
 
 ## 3. Multi-agent explanation
 
@@ -79,6 +82,8 @@ specialists run as a conservative fallback. The LLM is only called when you clic
 | **Senior Reviewer** | Synthesizes the specialist findings into a decision-oriented assessment rather than repeating every observation. | Quality score, readiness status, executive summary, top gaps, recommended clarifications and acceptance criteria, and final recommendation. |
 
 After the Guardrail allows a submission, the selected specialists review the **original requirement independently** and run sequentially. The Senior Reviewer sees the original requirement plus their findings. A `MAJOR GAPS` result, or a mismatch between score and status, triggers one targeted specialist call based on the reported gaps; its findings appear alongside the consolidated assessment without a second Senior Reviewer call.
+
+Before each BA, QA, or Risk prompt, the orchestrator retrieves up to two relevant snippets from that agent's local reference files. The Senior Reviewer receives up to two similar synthetic past-review examples for score calibration. A targeted follow-up receives context for its specialist as well. TF-IDF and cosine similarity run entirely in the app process; retrieval adds no LLM calls or external API calls, and irrelevant matches below the similarity threshold are omitted. Guardrail and classifier prompts do not use retrieved context.
 
 ## 4. Prerequisites
 
@@ -132,6 +137,6 @@ streamlit run app.py
 - The Risk Reviewer gives general product-risk observations only, not legal or compliance advice.
 - AI output can be wrong; it supports, and does not replace, human review.
 
-## 10. Next enhancement: Retrieval-Augmented Generation (RAG)
+## 10. Local retrieval (RAG)
 
-Implement RAG to retrieve relevant context from trusted sources such as product documentation, business rules, and approved policies, then provide cited excerpts to the review agents. Protect sensitive data and evaluate retrieval quality and review outcomes before production use. RAG can make findings more specific, but reviewers should verify sources and recommendations because it does not guarantee correctness.
+The demo includes a small synthetic knowledge base in `knowledge_base/`: a glossary, requirement-quality guidance, general product-risk patterns, and four past-review examples. `retriever.py` reads these files once at import time and uses scikit-learn's `TfidfVectorizer` and cosine similarity to select a small amount of context for relevant prompts. It makes no network calls and does not change the number of LLM calls. The examples are for demonstration and calibration only; replace them with approved, maintained reference material and evaluate retrieval quality before production use. Reviewers should verify retrieved context and recommendations because retrieval does not guarantee correctness.
