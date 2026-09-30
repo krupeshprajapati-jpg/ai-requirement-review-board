@@ -11,6 +11,9 @@ SYSTEM_PROMPT = (
     "5-6 several important gaps; 0-4 major ambiguity or missing information. "
     "Keep status consistent with score: READY for 7-10, NEEDS CLARIFICATION for 5-6, "
     "and MAJOR GAPS for 0-4. "
+    "Decide whether a targeted specialist follow-up is needed after consolidation. Request one when a material "
+    "gap remains uncertain, specialist findings conflict, or a key risk needs verification; otherwise do not. "
+    "When requesting follow-up, choose the single most relevant specialist from ba, qa, or risk. "
     "Return ONLY valid JSON (no markdown, no extra text) with exactly these keys: "
     '"quality_score" (number 0-10, one decimal allowed), '
     '"status" (exactly one of: READY, NEEDS CLARIFICATION, MAJOR GAPS), '
@@ -18,15 +21,19 @@ SYSTEM_PROMPT = (
     '"top_gaps" (at most 5 strings), '
     '"recommended_clarifications" (at most 5 strings), '
     '"recommended_acceptance_criteria" (at most 5 strings), '
-    '"final_recommendation" (2-3 sentences).'
+    '"final_recommendation" (2-3 sentences), '
+    '"needs_follow_up" (boolean), '
+    '"follow_up_specialist" ("ba", "qa", or "risk" when needs_follow_up is true; otherwise an empty string).'
 )
 
 
 def build_user_message(requirement: str, agent_results: dict, context: str = "") -> str:
-    """agent_results: {key: {"name", "status", "raw", "data", ...}} from the specialist agents."""
+    """agent_results: {key: {"name", "status", "raw", "data", ...}} from the specialist agents.
+
+    The senior reviewer intentionally uses only the requirement and specialist outputs; external
+    retrieval context is omitted from this agent.
+    """
     parts = [f"Original requirement:\n{requirement}"]
-    if context:
-        parts.append(context)
     for result in agent_results.values():
         if result["status"] != "ok":
             parts.append(f"{result['name']} findings: FAILED - no findings available.")

@@ -5,41 +5,46 @@ import streamlit as st
 from orchestrator import review
 
 SAMPLES = {
-    "Sample 1 - Ambiguous (part payment)": (
+    "Sample 1 - Ambiguous loan payment (BA + QA + Risk)": (
         "Customer should be allowed to make a part payment on their loan. After successful payment, "
         "the customer can choose one of the following options:\n\n"
         "1. Keep EMI same and reduce tenure\n"
         "2. Keep tenure same and reduce EMI"
     ),
-    "Sample 2 - Loan account contact update": (
-        "A loan customer should be able to update the email address on their loan account through the "
-        "customer portal after verifying a one-time password sent to the new address."
+    "Sample 2 - Internal report drafts (BA + QA)": (
+        "Employees should be able to save a draft internal report and reopen it for editing. "
+        "Each draft must appear in the employee's saved drafts list."
     ),
-    "Sample 3 - Incomplete/Risky (failed EMI payment)": (
-        "If a customer's monthly loan repayment fails, automatically retry the payment."
+    "Sample 3 - Trivial label change (QA only)": (
+        "On the internal admin sign-in page, change the static button label from 'Continue' to 'Next'. "
+        "Do not change the button behavior."
     ),
-    "Sample 4 - Low complexity (notification preference)": (
-        "A customer should be able to turn loan payment reminder emails on or off from the notification "
-        "settings page. The selected preference should be saved and shown when the page is reopened."
+    "Sample 4 - Automated payment retry (BA + QA + Risk)": (
+        "When a subscription payment fails, automatically retry it once after 24 hours and email the "
+        "account owner with the retry outcome. Specify how duplicate charges should be prevented."
     ),
-    "Sample 5 - QA focus (statement download)": (
-        "A customer should be able to download a monthly loan statement from the customer portal. The "
-        "statement should include transactions for the selected month and be available as a PDF."
+    "Sample 5 - Permanent workspace deletion (BA + QA + Risk)": (
+        "An administrator should be able to permanently delete a workspace and all of its project files. "
+        "The deleted data cannot be restored. Show the affected workspace name and require confirmation "
+        "before deletion."
     ),
-    "Sample 6 - Service request (repayment dispute)": (
-        "A loan customer should be able to raise a service request to dispute a repayment shown in their "
-        "loan transaction history, describe the issue, and attach supporting documents. The customer should "
-        "receive a case reference and be able to view status updates and the resolution."
+    "Sample 6 - Delivery delay email (BA + QA + Risk)": (
+        "When an order's delivery estimate changes, automatically email the customer with the previous "
+        "and updated delivery dates. Do not send another email if the estimate has not changed."
     ),
-    "Sample 7 - Risk focus (repayment account change)": (
-        "A loan customer should be able to replace the bank account used for monthly repayments in the "
-        "customer portal after entering an OTP. The new account should be used for the next repayment."
+    "Sample 7 - Roadmap planning principle (BA only)": (
+        "Product managers should consider team feedback when prioritizing the quarterly roadmap. This is "
+        "a planning principle only; no application behavior or external communication is being requested."
+    ),
+    "Sample 8 - Financial loss policy (BA + Risk)": (
+        "The company will absorb losses from duplicate invoice processing. This policy does not request "
+        "automated reversals or customer notifications; no software behavior is being changed."
     ),
 }
 PLACEHOLDER = "-- Choose a sample requirement --"
 
 AGENTS = [("guardrail", "Guardrail", "Checking request..."),
-          ("classifier", "Classifier", "Choosing reviews..."),
+          ("planner", "Orchestrator Planner", "Choosing reviews..."),
           ("ba", "Business Analyst", "Analyzing..."),
           ("qa", "QA Engineer", "Analyzing..."),
           ("risk", "Risk Reviewer", "Analyzing..."),
@@ -109,6 +114,9 @@ def render_agent_result(agent):
     if agent is None:
         st.info("Not run yet.")
         return
+    if agent["status"] == "skipped_by_orchestrator":
+        st.caption("Skipped by orchestrator based on the routing decision.")
+        return
     if agent["status"] == "failed":
         st.error(f"{agent['name']} failed: {agent['error']}")
         return
@@ -135,13 +143,16 @@ col_clear.button("Clear Review", on_click=clear_review, use_container_width=True
 
 # ---------- status area ----------
 st.markdown("#### Agent Status")
+routing_panel = st.empty()
 status_boxes = {}
 for column, (key, label, _) in zip(st.columns(len(AGENTS)), AGENTS):
     status_boxes[key] = column.empty()
 
 RUNNING_TEXT = {key: text for key, _, text in AGENTS}
 LABELS = {key: label for key, label, _ in AGENTS}
-STATE_VIEW = {"waiting": "⚪ Waiting", "done": "✅ Completed", "failed": "❌ Failed", "skipped": "⏭️ Skipped"}
+STATE_VIEW = {"waiting": "⚪ Waiting", "done": "✅ Completed", "failed": "❌ Failed",
+              "skipped": "⏭️ Skipped", "fallback": "↪ Fallback rules used",
+              "skipped_by_orchestrator": "⏭️ Skipped by orchestrator"}
 
 
 def show_status(key, state):
@@ -152,10 +163,18 @@ def show_status(key, state):
 def status_from_result(result):
     states = {}
     for key, _, _ in AGENTS:
-        if key in {"reviewer", "follow_up"}:
+        if key in {"planner", "reviewer", "follow_up"}:
             continue
         agent = result["agents"].get(key)
-        states[key] = "skipped" if agent is None else ("done" if agent["status"] == "ok" else "failed")
+        if agent is None:
+            states[key] = "skipped"
+        elif agent["status"] == "skipped_by_orchestrator":
+            states[key] = "skipped_by_orchestrator"
+        else:
+            states[key] = "done" if agent["status"] == "ok" else "failed"
+    routing = result.get("routing")
+    states["planner"] = ("skipped" if routing is None else
+                         "done" if routing["source"] == "planner" else "fallback")
     final = result["final"]
     states["reviewer"] = "skipped" if final is None else ("done" if final["status"] == "ok" else "failed")
     follow_up = result.get("follow_up")
@@ -180,13 +199,21 @@ else:
     for key, _, _ in AGENTS:
         show_status(key, "waiting")
 
+if st.session_state.result and st.session_state.result.get("routing"):
+    routing = st.session_state.result["routing"]
+    with routing_panel.container():
+        st.markdown("#### Orchestrator Decision")
+        st.write(routing["reasoning"])
+        source_label = "LLM planner" if routing["source"] == "planner" else "Fallback rules"
+        st.caption(f"Decision source: {source_label} | Specialists: {', '.join(routing['agents_to_run'])}")
+
 # ---------- results (read from session_state, never triggers LLM calls) ----------
 result = st.session_state.result
 if result:
     if result["error"]:
         st.error(result["error"])
 
-    tab_final, tab_guardrail, tab_classifier, tab_ba, tab_qa, tab_risk, tab_follow_up, tab_tech = st.tabs(
+    tab_final, tab_guardrail, tab_routing, tab_ba, tab_qa, tab_risk, tab_follow_up, tab_tech = st.tabs(
         ["Final Review", "Guardrail", "Routing", "Business Analyst", "QA Engineer", "Risk Analysis",
          "Targeted Follow-up", "Technical Details"])
 
@@ -232,11 +259,14 @@ if result:
     with tab_guardrail:
         render_agent_result(result["agents"].get("guardrail"))
 
-    with tab_classifier:
-        classifier = result["agents"].get("classifier")
-        render_agent_result(classifier)
-        if classifier and classifier["status"] == "failed" and not classifier["data"]:
-            st.info("Routing output was unusable; all specialists were run as a fallback.")
+    with tab_routing:
+        routing = result.get("routing")
+        if routing:
+            st.markdown(f"**Decision source:** {'LLM planner' if routing['source'] == 'planner' else 'Fallback rules'}")
+            st.markdown(f"**Selected specialists:** {', '.join(routing['agents_to_run'])}")
+            st.write(routing["reasoning"])
+        else:
+            st.info("No routing decision was made because the request did not pass the guardrail.")
 
     with tab_ba:
         render_agent_result(result["agents"].get("ba"))
@@ -253,7 +283,11 @@ if result:
     with tab_tech:
         st.markdown(f"**Model:** {result['model'] or 'N/A'}")
         st.markdown(f"**LLM calls:** {result['llm_calls']} (successful: {result['successful_calls']})")
-        st.markdown("**Agents:** 6, plus an optional targeted follow-up")
+        routing = result.get("routing")
+        routing_label = ("dynamic (LLM planner)" if routing and routing["source"] == "planner"
+                         else "static fallback rules" if routing else "not run")
+        st.markdown(f"**Routing:** {routing_label}")
+        st.markdown("**Agents:** Guardrail, planner, selected specialists, Senior Reviewer, optional targeted follow-up")
         st.markdown("**Architecture:** Multi-Agent Orchestration")
         st.markdown("**Retrieval:** local TF-IDF over a synthetic knowledge base (no external calls)")
         if result["tokens"]:
