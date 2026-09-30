@@ -24,19 +24,19 @@ Major gaps or an inconsistent score/status trigger one targeted specialist follo
              /         \
           no             yes
           |               |
-        Stop        Orchestrator Planner
+        Stop        OrchestratorPlannerAgent
                        /           \
-                    valid       failed / invalid
+                    valid       failed/invalid
                      |                |
-               Planner selection  Fallback Rules
+               PlannerSelection  FallbackRules
                      \                /
-               Ordered specialist selection
+               OrderedSpecialistSelection
                     /       |       \
                    BA      QA      Risk
                     \       |       /
-                     Senior Reviewer
+                     SeniorReviewer
                           |
-       Major gaps OR score mismatch?
+       Major gaps OR score mismatch OR fallback?
               /           \
             yes             no
              |               |
